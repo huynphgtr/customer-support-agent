@@ -4,7 +4,7 @@
 
 | Info | Value |
 |---|---|
-| **AWS Account ID** | `958923398802` |
+| **AWS Account ID** | `` |
 | **Region** | `us-east-1` |
 | **Project Name** | `CustomerSupport2` |
 | **Stack Name** | `AgentCore-CustomerSupport2-default` |
