@@ -1,3 +1,81 @@
 {
-  "targets": {}
+  "targets": {
+    "default": {
+      "resources": {
+        "runtimes": {
+          "CustomerSupport2": {
+            "runtimeId": "CustomerSupport2_CustomerSupport2-LE2Egp2x1P",
+            "runtimeArn": "arn:aws:bedrock-agentcore:us-east-1:958923398802:runtime/CustomerSupport2_CustomerSupport2-LE2Egp2x1P",
+            "roleArn": "arn:aws:iam::958923398802:role/AgentCore-CustomerSupport-ApplicationAgentCustomerS-Ysc3QgPuwRc6"
+          }
+        },
+        "memories": {
+          "SharedMemory": {
+            "memoryId": "CustomerSupport2_SharedMemory-iMkNj1EKq4",
+            "memoryArn": "arn:aws:bedrock-agentcore:us-east-1:958923398802:memory/CustomerSupport2_SharedMemory-iMkNj1EKq4"
+          }
+        },
+        "gateways": {
+          "my-gateway-secure": {
+            "gatewayId": "customersupport2-my-gateway-secure-thl3v8imhb",
+            "gatewayArn": "arn:aws:bedrock-agentcore:us-east-1:958923398802:gateway/customersupport2-my-gateway-secure-thl3v8imhb",
+            "gatewayUrl": "https://customersupport2-my-gateway-secure-thl3v8imhb.gateway.bedrock-agentcore.us-east-1.amazonaws.com",
+            "targets": {
+              "ProcessRefund": {
+                "targetId": "JE6ZRQFHIJ"
+              },
+              "WarrantyCheck": {
+                "targetId": "F8MKY0SQO1"
+              }
+            }
+          }
+        },
+        "credentials": {
+          "gateway-egress-oauth": {
+            "credentialProviderArn": "arn:aws:bedrock-agentcore:us-east-1:958923398802:token-vault/default/oauth2credentialprovider/gateway-egress-oauth",
+            "clientSecretArn": "arn:aws:secretsmanager:us-east-1:958923398802:secret:bedrock-agentcore-identity!default/oauth2/gateway-egress-oauth-ec06f1e1-NG57VE",
+            "callbackUrl": "https://bedrock-agentcore.us-east-1.amazonaws.com/identities/oauth2/callback/861ff49d-0866-47ba-b255-87daf51951f5"
+          }
+        },
+        "onlineEvalConfigs": {
+          "QualityMonitor": {
+            "onlineEvaluationConfigId": "CustomerSupport2_QualityMonitor-GLUrgo4ed2",
+            "onlineEvaluationConfigArn": "arn:aws:bedrock-agentcore:us-east-1:958923398802:online-evaluation-config/CustomerSupport2_QualityMonitor-GLUrgo4ed2",
+            "agent": "CustomerSupport2"
+          }
+        },
+        "policyEngines": {
+          "CustomerSupportPolicyEngine": {
+            "policyEngineId": "CustomerSupport2_CustomerSupportPolicyEngine-ch4h939irg",
+            "policyEngineArn": "arn:aws:bedrock-agentcore:us-east-1:958923398802:policy-engine/CustomerSupport2_CustomerSupportPolicyEngine-ch4h939irg"
+          }
+        },
+        "policies": {
+          "CustomerSupportPolicyEngine/refund_limit_policy": {
+            "policyId": "refund_limit_policy-bmf1umyioj",
+            "policyArn": "arn:aws:bedrock-agentcore:us-east-1:958923398802:policy-engine/CustomerSupport2_CustomerSupportPolicyEngine-ch4h939irg/policy/refund_limit_policy-bmf1umyioj",
+            "engineName": "CustomerSupportPolicyEngine"
+          },
+          "CustomerSupportPolicyEngine/warranty_check_policy": {
+            "policyId": "warranty_check_policy-bnl008pcsr",
+            "policyArn": "arn:aws:bedrock-agentcore:us-east-1:958923398802:policy-engine/CustomerSupport2_CustomerSupportPolicyEngine-ch4h939irg/policy/warranty_check_policy-bnl008pcsr",
+            "engineName": "CustomerSupportPolicyEngine"
+          }
+        },
+        "harnesses": {
+          "OrderResearchAgent": {
+            "harnessId": "CustomerSupport2_OrderResearchAgent-vg2IQyuVCh",
+            "harnessArn": "arn:aws:bedrock-agentcore:us-east-1:958923398802:harness/CustomerSupport2_OrderResearchAgent-vg2IQyuVCh",
+            "roleArn": "arn:aws:iam::958923398802:role/CustomerSupport2_OrderResearchAgent",
+            "status": "READY",
+            "harnessVersion": 1,
+            "agentRuntimeArn": "arn:aws:bedrock-agentcore:us-east-1:958923398802:runtime/harness_CustomerSupport2_OrderResearchAgent-j1dLRVBi0x",
+            "provisioner": "cloudformation"
+          }
+        },
+        "stackName": "AgentCore-CustomerSupport2-default",
+        "deployHash": "3510078c06081392"
+      }
+    }
+  }
 }

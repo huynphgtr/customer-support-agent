@@ -1,125 +1,151 @@
-from typing import Any
-from collections import OrderedDict
 from strands import Agent, tool
-import asyncio
-from strands.agent.conversation_manager.null_conversation_manager import NullConversationManager
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
 from model.load import load_model
-from mcp_client.client import get_streamable_http_mcp_client
+from mcp_client.client import get_streamable_http_mcp_client, get_gateway_mcp_client
 from memory.session import get_memory_session_manager
+import jwt
 
 app = BedrockAgentCoreApp()
 log = app.logger
 
-# Define a Streamable HTTP MCP Client
-mcp_clients = [get_streamable_http_mcp_client()]
+SYSTEM_PROMPT="""You are a helpful and professional customer support assistant for an e-commerce company.
+Your role is to:
+- Provide accurate information using the tools available to you
+- Be friendly, patient, and understanding with customers
+- Always offer additional help after answering questions
+- If you can't help with something, direct customers to the appropriate contact
 
-DEFAULT_SYSTEM_PROMPT = """
-You are a helpful assistant. Use tools when appropriate.
+You have access to tools for looking up return policies, searching product information, and more.
+Additional tools may be available at runtime — always check your full tool list and use the most appropriate tool for each customer request.
+Always use tools to get accurate, up-to-date information rather than guessing.
+IMPORTANT: Do NOT use emojis or special Unicode characters in your responses. Use plain text only."""
 
-"""
+# --- Customer Support Tools ---
 
+RETURN_POLICIES = {
+    "electronics": {"window": "30 days", "condition": "Original packaging required, must be unused or defective", "refund": "Full refund to original payment method"},
+    "accessories": {"window": "14 days", "condition": "Must be in original packaging, unused", "refund": "Store credit or exchange"},
+    "audio": {"window": "30 days", "condition": "Defective items only after 15 days", "refund": "Full refund within 15 days, replacement after"},
+}
 
-# Define a collection of tools used by the model
-tools = []
+PRODUCTS = {
+    "PROD-001": {"name": "Wireless Headphones", "price": 79.99, "category": "audio", "description": "Noise-cancelling Bluetooth headphones with 30h battery life"},
+    "PROD-002": {"name": "Smart Watch", "price": 249.99, "category": "electronics", "description": "Fitness tracker with heart rate monitor, GPS, and 5-day battery"},
+    "PROD-003": {"name": "Laptop Stand", "price": 39.99, "category": "accessories", "description": "Adjustable aluminum laptop stand for ergonomic desk setup"},
+    "PROD-004": {"name": "USB-C Hub", "price": 54.99, "category": "accessories", "description": "7-in-1 USB-C hub with HDMI, USB-A, SD card reader, and ethernet"},
+    "PROD-005": {"name": "Mechanical Keyboard", "price": 129.99, "category": "electronics", "description": "RGB mechanical keyboard with Cherry MX switches"},
+}
 
-_INLINE_FUNCTION_NAMES = set()
-
-# Define a simple function tool
 @tool
-def add_numbers(a: int, b: int) -> int:
-    """Return the sum of two numbers"""
-    return a+b
-tools.append(add_numbers)
+def get_return_policy(product_category: str) -> str:
+    """Get return policy information for a specific product category.
+
+    Args:
+        product_category: Product category (e.g., 'electronics', 'accessories', 'audio')
+
+    Returns:
+        Formatted return policy details including timeframes and conditions
+    """
+    category = product_category.lower()
+    if category in RETURN_POLICIES:
+        policy = RETURN_POLICIES[category]
+        return f"Return policy for {category}: Window: {policy['window']}, Condition: {policy['condition']}, Refund: {policy['refund']}"
+    return f"No specific return policy found for '{product_category}'. Please contact support for details."
+
+@tool
+def get_product_info(query: str) -> str:
+    """Search for product information by name, ID, or keyword.
+
+    Args:
+        query: Product name, ID (e.g., 'PROD-001'), or search keyword
+
+    Returns:
+        Product details including name, price, category, and description
+    """
+    query_lower = query.lower()
+    # Search by ID
+    if query.upper() in PRODUCTS:
+        p = PRODUCTS[query.upper()]
+        return f"{p['name']} ({query.upper()}): ${p['price']}, Category: {p['category']}, {p['description']}"
+    # Search by keyword
+    results = [f"{pid}: {p['name']} - ${p['price']} - {p['description']}" for pid, p in PRODUCTS.items()
+               if query_lower in p['name'].lower() or query_lower in p['description'].lower() or query_lower in p['category'].lower()]
+    if results:
+        return "Found products:\n" + "\n".join(results)
+    return f"No products found matching '{query}'."
+
+# --- Agent Setup ---
+
+_agent = None
+
+def get_or_create_agent(session_id, user_id, auth_header):
+    global _agent
+
+    session_manager = get_memory_session_manager(session_id, user_id)
+
+    # MCP clients: Exa AI (web search) + AgentCore Gateway (Lambda tools)
+    mcp_clients = [get_streamable_http_mcp_client(), get_gateway_mcp_client(auth_header)]
+    tools = [get_return_policy, get_product_info]
+
+    # Add MCP clients to tools
+    for mcp_client in mcp_clients:
+        if mcp_client:
+            tools.append(mcp_client)
+
+    if _agent is None:
+        _agent = Agent(
+            model=load_model(),
+            session_manager=session_manager,
+            system_prompt=SYSTEM_PROMPT,
+            tools=tools
+        )
+    return _agent
 
 
+def extract_user_id(auth_header) -> str | None:
+    """Extract user_id from JWT bearer token (username claim) or fall back to custom header."""
+    if auth_header and auth_header.startswith("Bearer "):
+        try:
+            token = auth_header.split(" ", 1)[1]
+            claims = jwt.decode(token, options={"verify_signature": False})
+            username = claims.get("username")
+            if username:
+                return username
+        except Exception as e:
+            log.warning(f"Failed to decode JWT for user_id: {e}")
+    else:
+        log.info(f"No Bearer token found. Auth header present: {auth_header is not None}")
 
-# Add MCP client to tools if available
-for mcp_client in mcp_clients:
-    if mcp_client:
-        tools.append(mcp_client)
-
-
-def _make_conversation_manager():
-    return NullConversationManager()
-
-def agent_factory():
-    cache = {}
-    def get_or_create_agent(session_id, user_id):
-        _actor_id = user_id
-        key = f"{session_id}/{_actor_id}"
-        if key not in cache:
-            cache[key] = Agent(
-                model=load_model(),
-                session_manager=get_memory_session_manager(session_id, _actor_id),
-                conversation_manager=_make_conversation_manager(),
-                system_prompt=DEFAULT_SYSTEM_PROMPT,
-                tools=tools,
-                hooks=[
-                ],
-            )
-        return cache[key]
-    return get_or_create_agent
-get_or_create_agent = agent_factory()
-
-
-def _extract_prompt(payload: dict):
-    """Accept harness-style messages[], tool_results[], or plain prompt string payloads."""
-    if "messages" in payload:
-        return payload["messages"]
-    if "tool_results" in payload:
-        return [{"role": "user", "content": [{"toolResult": {
-            "toolUseId": tr["toolUseId"],
-            "status": tr.get("status", "success"),
-            "content": tr.get("content", []),
-        }} for tr in payload["tool_results"]]}]
-    return payload.get("prompt", "")
-
-
-def _has_inline_function_call(messages) -> bool:
-    """Return True if messages contains an assistant toolUse for an inline function tool."""
-    if not _INLINE_FUNCTION_NAMES or not isinstance(messages, list):
-        return False
-    for msg in messages:
-        if msg.get("role") == "assistant":
-            for block in msg.get("content", []):
-                if isinstance(block, dict) and block.get("toolUse", {}).get("name") in _INLINE_FUNCTION_NAMES:
-                    return True
-    return False
-
-
-def _is_inline_function_call(event: dict) -> bool:
-    """Check if a contentBlockStart event is for an inline function tool."""
-    if not _INLINE_FUNCTION_NAMES:
-        return False
-    cbs = event.get("contentBlockStart", {})
-    start = cbs.get("start", {})
-    tool_use = start.get("toolUse") if isinstance(start, dict) else None
-    return tool_use is not None and tool_use.get("name") in _INLINE_FUNCTION_NAMES
-
+    return None
 
 
 @app.entrypoint
 async def invoke(payload, context):
     log.info("Invoking Agent.....")
 
+    session_id = context.session_id
 
-    session_id = getattr(context, 'session_id', 'default-session')
-    user_id = getattr(context, 'user_id', 'default-user')
-    agent = get_or_create_agent(session_id, user_id)
+    # Access request headers - handle None case
+    request_headers = context.request_headers or {}
 
-    prompt = _extract_prompt(payload)
+    # Get Client JWT token
+    auth_header = request_headers.get('Authorization', '')
 
+    # Extract user_id from JWT or fall back to custom header
+    user_id = extract_user_id(auth_header)
+    if not user_id:
+        user_id = request_headers.get('x-amzn-bedrock-agentcore-runtime-custom-user-id')
+    if not user_id:
+        user_id = payload.get("user_id", "default-user")
 
-    async for event in agent.stream_async(
-        prompt,
-    ):
-        if not isinstance(event, dict) or "event" not in event:
-            continue
-        cbs = event["event"].get("contentBlockStart")
-        if cbs is not None and not cbs.get("start"):
-            continue
-        yield event
+    if not session_id:
+        raise ValueError("session_id is required. Pass --session-id when invoking.")
+
+    agent = get_or_create_agent(session_id, user_id, auth_header)
+    stream = agent.stream_async(payload.get("prompt"))
+    async for event in stream:
+        if "data" in event and isinstance(event["data"], str):
+            yield event["data"]
 
 
 if __name__ == "__main__":

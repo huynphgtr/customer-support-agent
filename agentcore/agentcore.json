@@ -15,25 +15,154 @@
       "codeLocation": "app/CustomerSupport2/",
       "runtimeVersion": "PYTHON_3_14",
       "networkMode": "PUBLIC",
-      "protocol": "HTTP"
+      "protocol": "HTTP",
+      "requestHeaderAllowlist": [
+        "X-Amzn-Bedrock-AgentCore-Runtime-Custom-User-Id",
+        "Authorization"
+      ],
+      "authorizerType": "CUSTOM_JWT",
+      "authorizerConfiguration": {
+        "customJwtAuthorizer": {
+          "discoveryUrl": "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_ZxJksP0QJ/.well-known/openid-configuration",
+          "allowedClients": [
+            "3vq397da63qa4h50ov9klr8otj",
+            "46qmrju8pqjnn563k9rdmv3gp3",
+            "3n0ika9r1k63ma00jd785uek3r"
+          ]
+        }
+      }
     }
   ],
   "memories": [
     {
-      "name": "CustomerSupport2Memory",
+      "name": "SharedMemory",
       "eventExpiryDuration": 30,
-      "strategies": []
+      "strategies": [
+        {
+          "type": "SEMANTIC",
+          "namespaces": [
+            "/users/{actorId}/facts"
+          ]
+        },
+        {
+          "type": "SUMMARIZATION",
+          "namespaces": [
+            "/summaries/{actorId}/{sessionId}"
+          ]
+        }
+      ]
     }
   ],
   "knowledgeBases": [],
-  "credentials": [],
+  "credentials": [
+    {
+      "authorizerType": "OAuthCredentialProvider",
+      "name": "gateway-egress-oauth",
+      "discoveryUrl": "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_ZxJksP0QJ/.well-known/openid-configuration",
+      "scopes": [
+        "agentcore-gateway/read"
+      ],
+      "vendor": "CustomOauth2"
+    }
+  ],
   "evaluators": [],
-  "onlineEvalConfigs": [],
-  "agentCoreGateways": [],
-  "policyEngines": [],
+  "onlineEvalConfigs": [
+    {
+      "name": "QualityMonitor",
+      "agent": "CustomerSupport2",
+      "evaluators": [
+        "Builtin.GoalSuccessRate",
+        "Builtin.Correctness",
+        "Builtin.ToolSelectionAccuracy"
+      ],
+      "samplingRate": 100,
+      "enableOnCreate": true
+    }
+  ],
+  "agentCoreGateways": [
+    {
+      "name": "my-gateway-secure",
+      "protocolType": "None",
+      "description": "Gateway for my-gateway-secure",
+      "targets": [
+        {
+          "name": "WarrantyCheck",
+          "targetType": "lambdaFunctionArn",
+          "lambdaFunctionArn": {
+            "lambdaArn": "arn:aws:lambda:us-east-1:958923398802:function:workshop-warranty-check",
+            "toolSchemaFile": "app/CustomerSupport2/tool/warranty_schema.json"
+          }
+        },
+        {
+          "name": "ProcessRefund",
+          "targetType": "lambdaFunctionArn",
+          "lambdaFunctionArn": {
+            "lambdaArn": "arn:aws:lambda:us-east-1:958923398802:function:workshop-process-refund",
+            "toolSchemaFile": "app/CustomerSupport2/tool/refund_schema.json"
+          }
+        }
+      ],
+      "authorizerType": "CUSTOM_JWT",
+      "authorizerConfiguration": {
+        "customJwtAuthorizer": {
+          "discoveryUrl": "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_ZxJksP0QJ/.well-known/openid-configuration",
+          "allowedClients": [
+            "3vq397da63qa4h50ov9klr8otj",
+            "46qmrju8pqjnn563k9rdmv3gp3",
+            "3n0ika9r1k63ma00jd785uek3r"
+          ]
+        }
+      },
+      "enableSemanticSearch": true,
+      "exceptionLevel": "NONE",
+      "policyEngineConfiguration": {
+        "policyEngineName": "CustomerSupportPolicyEngine",
+        "mode": "ENFORCE"
+      }
+    }
+  ],
+  "unassignedTargets": [
+    {
+      "name": "WarrantyCheck",
+      "targetType": "lambdaFunctionArn",
+      "lambdaFunctionArn": {
+        "lambdaArn": "arn:aws:lambda:us-east-1:958923398802:function:workshop-warranty-check",
+        "toolSchemaFile": "app/CustomerSupport2/tool/warranty_schema.json"
+      }
+    }
+  ],
+  "policyEngines": [
+    {
+      "name": "CustomerSupportPolicyEngine",
+      "description": "Governs customer support agent tool access - refund limits and tool permissions",
+      "policies": [
+        {
+          "name": "refund_limit_policy",
+          "description": "Allow refunds under 100 dollars only",
+          "statement": "permit(principal, action == AgentCore::Action::\"ProcessRefund___process_refund\", resource == AgentCore::Gateway::\"arn:aws:bedrock-agentcore:us-east-1:958923398802:gateway/customersupport2-my-gateway-secure-thl3v8imhb\") when { ((context.input).amount) < 100 };",
+          "validationMode": "IGNORE_ALL_FINDINGS",
+          "enforcementMode": "ACTIVE",
+          "authorizationPhase": "INITIATE"
+        },
+        {
+          "name": "warranty_check_policy",
+          "description": "Allow all authenticated users to check warranties",
+          "statement": "permit(principal, action == AgentCore::Action::\"WarrantyCheck___check_warranty\", resource == AgentCore::Gateway::\"arn:aws:bedrock-agentcore:us-east-1:958923398802:gateway/customersupport2-my-gateway-secure-thl3v8imhb\") when { (principal is AgentCore::OAuthUser) };",
+          "validationMode": "IGNORE_ALL_FINDINGS",
+          "enforcementMode": "ACTIVE",
+          "authorizationPhase": "INITIATE"
+        }
+      ]
+    }
+  ],
   "configBundles": [],
   "abTests": [],
-  "harnesses": [],
+  "harnesses": [
+    {
+      "name": "OrderResearchAgent",
+      "path": "app/OrderResearchAgent"
+    }
+  ],
   "datasets": [],
   "payments": []
 }

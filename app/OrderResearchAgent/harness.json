@@ -1,0 +1,36 @@
+{
+  "name": "OrderResearchAgent",
+  "model": {
+    "provider": "bedrock",
+    "modelId": "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
+  },
+  "systemPrompt": "You are an order research specialist. Help customers investigate order issues, check warranties, and produce detailed analysis reports. Always be thorough and provide structured summaries. Save reports to /tmp/ when asked.",
+  "tools": [
+    {
+      "type": "agentcore_code_interpreter",
+      "name": "code-interpreter"
+    },
+    {
+      "type": "agentcore_gateway",
+      "name": "my-gateway-secure",
+      "config": {
+        "agentCoreGateway": {
+          "gatewayArn": "arn:aws:bedrock-agentcore:us-east-1:958923398802:gateway/customersupport2-my-gateway-secure-thl3v8imhb",
+          "outboundAuth": {
+            "oauth": {
+              "providerArn": "arn:aws:bedrock-agentcore:us-east-1:958923398802:token-vault/default/oauth2credentialprovider/gateway-egress-oauth",
+              "scopes": [
+                "agentcore-gateway/read"
+              ],
+              "grantType": "CLIENT_CREDENTIALS"
+            }
+          }
+        }
+      }
+    }
+  ],
+  "skills": [],
+  "memory": {
+    "mode": "disabled"
+  }
+}
